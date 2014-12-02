@@ -2,6 +2,8 @@ package org.elasticsearch.river.mongodb;
 
 import org.elasticsearch.river.mongodb.util.MongoDBRiverHelper;
 
+import java.util.Map;
+
 class StatusChecker implements Runnable {
 
     private final MongoDBRiver mongoDBRiver;
@@ -12,6 +14,7 @@ class StatusChecker implements Runnable {
         this.mongoDBRiver = mongoDBRiver;
         this.definition = definition;
         this.context = context;
+
     }
 
     @Override
@@ -20,17 +23,34 @@ class StatusChecker implements Runnable {
             try {
                 if (this.mongoDBRiver.startInvoked) {
                     Status status = MongoDBRiverHelper.getRiverStatus(this.mongoDBRiver.esClient, this.definition.getRiverName());
-                    if (status != this.context.getStatus()) {
-                        if (status == Status.RUNNING) {
-                            MongoDBRiver.logger.trace("About to start river: {}", this.definition.getRiverName());
+                    if (status == Status.RUNNING) {
+                        if (status != this.context.getStatus()) {
                             this.mongoDBRiver.start();
-                        } else if (status == Status.STOPPED) {
-                            MongoDBRiver.logger.info("About to stop river: {}", this.definition.getRiverName());
+                        } else {
+                            Status mongoStatus = MongoDBRiverHelper.getMongoStatus(this.mongoDBRiver.esClient, this.definition.getRiverName());
+                            if (mongoStatus == Status.MONGO_UPDATE) {
+                                Map<String, Object> setting = MongoDBRiverHelper.getSetting(this.mongoDBRiver.esClient, this.definition.getRiverName());
+                                if (setting != null) {
+                                    this.mongoDBRiver.restartWithSetting(setting);
+                                } else {
+                                    MongoDBRiver.logger.error("The river[{}] setting is empty. closing...", this.definition.getRiverName());
+                                    this.mongoDBRiver.close();
+                                }
+                            }
+                        }
+                    } else if (status == Status.STOPPED) {
+                        if (status != this.context.getStatus()) {
                             this.mongoDBRiver.close();
+                        }
+                    } else if (status == Status.IMPORT_FAILED || status == Status.COLLECTION_DROPED) {
+                        if (status != this.context.getStatus()) {
+                            MongoDBRiver.logger.info("The river {} status is {} ,River close and status thread interrupted.", this.definition.getRiverName(), status);
+                            this.mongoDBRiver.close();
+                            Thread.currentThread().interrupt();
                         }
                     }
                 }
-                Thread.sleep(1000L);
+                Thread.sleep(3000L);
             } catch (InterruptedException e) {
                 MongoDBRiver.logger.debug("Status thread interrupted", e, (Object) null);
                 Thread.currentThread().interrupt();

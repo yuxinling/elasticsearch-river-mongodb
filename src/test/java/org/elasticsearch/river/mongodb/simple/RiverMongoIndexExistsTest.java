@@ -75,7 +75,7 @@ public class RiverMongoIndexExistsTest extends RiverMongoDBTestAbstract {
             createRiver();
 
             Thread.sleep(wait);
-            Assert.assertEquals(Status.INITIAL_IMPORT_FAILED, MongoDBRiverHelper.getRiverStatus(getNode().client(), getRiver()));
+            Assert.assertEquals(Status.START_FAILED, MongoDBRiverHelper.getRiverStatus(getNode().client(), getRiver()));
         } catch (Throwable t) {
             logger.error("InitialImport failed.", t);
             t.printStackTrace();

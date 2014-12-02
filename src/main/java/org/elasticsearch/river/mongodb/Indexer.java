@@ -103,7 +103,7 @@ class Indexer implements Runnable {
         processors.clear();
     }
 
-    @SuppressWarnings({ "unchecked" })
+    @SuppressWarnings({"unchecked"})
     private Timestamp<?> processBlockingQueue(QueueEntry entry) {
         Operation operation = entry.getOperation();
         if (entry.getData().get(MongoDBRiver.MONGODB_ID_FIELD) == null
@@ -144,8 +144,14 @@ class Indexer implements Runnable {
             return lastTimestamp;
         }
 
-        if (hasScript() && definition.isAdvancedTransformation()) {
-            return applyAdvancedTransformation(entry, type);
+        //if (hasScript() && definition.isAdvancedTransformation()) {
+        //    return applyAdvancedTransformation(entry, type);
+        //}
+
+        //TODO: At current relase do not support script.
+        if (hasScript() || definition.isAdvancedTransformation()) {
+            logger.info("The river does not suppport the script for data []", entry.getData());
+            return lastTimestamp;
         }
 
         if (logger.isTraceEnabled()) {
@@ -160,47 +166,47 @@ class Indexer implements Runnable {
 
         Map<String, Object> ctx = new HashMap<>();
         Map<String, Object> data = entry.getData().toMap();
-        if (hasScript()) {
-            if (ctx != null) {
-                ctx.put("document", entry.getData());
-                ctx.put("operation", operation.getValue());
-                if (!objectId.isEmpty()) {
-                    ctx.put("id", objectId);
-                }
-                if (logger.isTraceEnabled()) {
-                    logger.trace("Script to be executed: {} - {}", definition.getScriptType(), definition.getScript());
-                    logger.trace("Context before script executed: {}", ctx);
-                }
-                try {
-                    ExecutableScript executableScript = scriptService.executable(definition.getScriptType(), definition.getScript(),
-                            ScriptService.ScriptType.INLINE, ImmutableMap.of("logger", logger));
-                    executableScript.setNextVar("ctx", ctx);
-                    executableScript.run();
-                    // we need to unwrap the context object...
-                    ctx = (Map<String, Object>) executableScript.unwrap(ctx);
-                } catch (Exception e) {
-                    logger.warn("failed to script process {}, ignoring", e, ctx);
-                    MongoDBRiverHelper.setRiverStatus(esClient, definition.getRiverName(), Status.SCRIPT_IMPORT_FAILED);
-                }
-                if (logger.isTraceEnabled()) {
-                    logger.trace("Context after script executed: {}", ctx);
-                }
-                if (isDocumentIgnored(ctx)) {
-                    logger.trace("From script ignore document id: {}", objectId);
-                    // ignore document
-                    return lastTimestamp;
-                }
-                if (isDocumentDeleted(ctx)) {
-                    ctx.put("operation", MongoDBRiver.OPLOG_DELETE_OPERATION);
-                }
-                if (ctx.containsKey("document")) {
-                    data = (Map<String, Object>) ctx.get("document");
-                    logger.trace("From script document: {}", data);
-                }
-                operation = extractOperation(ctx);
-                logger.trace("From script operation: {} -> {}", ctx.get("operation").toString(), operation);
-            }
-        }
+//        if (hasScript()) {
+//            if (ctx != null) {
+//                ctx.put("document", entry.getData());
+//                ctx.put("operation", operation.getValue());
+//                if (!objectId.isEmpty()) {
+//                    ctx.put("id", objectId);
+//                }
+//                if (logger.isTraceEnabled()) {
+//                    logger.trace("Script to be executed: {} - {}", definition.getScriptType(), definition.getScript());
+//                    logger.trace("Context before script executed: {}", ctx);
+//                }
+//                try {
+//                    ExecutableScript executableScript = scriptService.executable(definition.getScriptType(), definition.getScript(),
+//                            ScriptService.ScriptType.INLINE, ImmutableMap.of("logger", logger));
+//                    executableScript.setNextVar("ctx", ctx);
+//                    executableScript.run();
+//                    // we need to unwrap the context object...
+//                    ctx = (Map<String, Object>) executableScript.unwrap(ctx);
+//                } catch (Exception e) {
+//                    logger.warn("failed to script process {}, ignoring", e, ctx);
+//                    MongoDBRiverHelper.setRiverStatus(esClient, definition.getRiverName(), Status.SCRIPT_IMPORT_FAILED);
+//                }
+//                if (logger.isTraceEnabled()) {
+//                    logger.trace("Context after script executed: {}", ctx);
+//                }
+//                if (isDocumentIgnored(ctx)) {
+//                    logger.trace("From script ignore document id: {}", objectId);
+//                    // ignore document
+//                    return lastTimestamp;
+//                }
+//                if (isDocumentDeleted(ctx)) {
+//                    ctx.put("operation", MongoDBRiver.OPLOG_DELETE_OPERATION);
+//                }
+//                if (ctx.containsKey("document")) {
+//                    data = (Map<String, Object>) ctx.get("document");
+//                    logger.trace("From script document: {}", data);
+//                }
+//                operation = extractOperation(ctx);
+//                logger.trace("From script operation: {} -> {}", ctx.get("operation").toString(), operation);
+//            }
+//        }
 
         try {
             String index = extractIndex(ctx);
@@ -216,14 +222,15 @@ class Indexer implements Runnable {
     }
 
     private void updateBulkRequest(DBObject data, String objectId, Operation operation, String index, String type, String routing,
-            String parent) throws IOException {
+                                   String parent) throws IOException {
         if (logger.isTraceEnabled()) {
             logger.trace("Operation: {} - index: {} - type: {} - routing: {} - parent: {}", operation, index, type, routing, parent);
         }
 
         if (operation == Operation.UNKNOWN) {
-            logger.error("Unknown operation for id[{}] - entry [{}] - index[{}] - type[{}]", objectId, data, index, type);
-            context.setStatus(Status.IMPORT_FAILED);
+            //TODO: Skip the unkown the op type.
+            logger.error("Unknown operation for id[{}] - entry [{}] - index[{}] - type[{}] and skip this item.", objectId, data, index, type);
+            //context.setStatus(Status.IMPORT_FAILED);
             return;
         }
 
@@ -245,12 +252,17 @@ class Indexer implements Runnable {
             logger.trace("Delete request [{}], [{}], [{}]", index, type, objectId);
             deleteBulkRequest(objectId, index, type, routing, parent);
         }
+
+        //TODO: To update the status of colletion_droped.
         if (operation == Operation.DROP_COLLECTION) {
             if (definition.isDropCollection()) {
                 MongoDBRiverBulkProcessor processor = getBulkProcessor(index, type);
                 processor.dropIndex();
             } else {
-                logger.info("Ignore drop collection request [{}], [{}]. The option has been disabled.", index, type);
+                //logger.info("Ignore drop collection request [{}], [{}]. The option has been disabled.", index, type);
+                //TODO: Update the status.
+                logger.info("The drop collection request [{}], [{}]. update the status [{}].", index, type, Status.COLLECTION_DROPED);
+                MongoDBRiverHelper.setRiverStatus(esClient, definition.getRiverName(), Status.COLLECTION_DROPED);
             }
         }
     }
@@ -329,7 +341,7 @@ class Indexer implements Runnable {
                     ctx = (Map<String, Object>) executableScript.unwrap(ctx);
                 } catch (Exception e) {
                     logger.error("failed to script process {}, ignoring", e, ctx);
-                    MongoDBRiverHelper.setRiverStatus(esClient, definition.getRiverName(), Status.SCRIPT_IMPORT_FAILED);
+                    //MongoDBRiverHelper.setRiverStatus(esClient, definition.getRiverName(), Status.SCRIPT_IMPORT_FAILED);
                 }
                 if (logger.isTraceEnabled()) {
                     logger.trace("Context after script executed: {}", ctx);
@@ -388,9 +400,8 @@ class Indexer implements Runnable {
 
     /**
      * Map a DBObject for indexing
-     * 
+     *
      * @param base
-     * @param mapData
      */
     private Map<String, Object> createObjectMap(DBObject base) {
         Map<String, Object> mapData = new HashMap<String, Object>();
@@ -412,7 +423,7 @@ class Indexer implements Runnable {
 
     /**
      * Map a DBRef to a Map for indexing
-     * 
+     *
      * @param ref
      * @return
      */

@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.mongodb.*;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.common.component.AbstractLifecycleComponent;
 import org.elasticsearch.common.inject.Inject;
@@ -12,10 +13,6 @@ import org.elasticsearch.common.inject.Singleton;
 import org.elasticsearch.common.settings.Settings;
 
 import com.google.common.base.Strings;
-import com.mongodb.MongoClient;
-import com.mongodb.MongoClientOptions;
-import com.mongodb.MongoCredential;
-import com.mongodb.ServerAddress;
 
 @Singleton
 public class MongoClientService extends AbstractLifecycleComponent<MongoClientService> {
@@ -49,7 +46,7 @@ public class MongoClientService extends AbstractLifecycleComponent<MongoClientSe
 
     /**
      * Get or create a {@link MongoClient} for the given {@code servers}.
-     *
+     * <p/>
      * If a client already exists for the given list of servers with the same credentials and
      * options it will be reused, otherwise a new client will be created.
      */
@@ -80,6 +77,10 @@ public class MongoClientService extends AbstractLifecycleComponent<MongoClientSe
 
             logger.info("Creating MongoClient for [{}]", servers);
             mongoClient = new MongoClient(servers, mongoCredentials, mongoClientOptions);
+            if (definition.isMongoSecondaryReadPreference()) {
+                mongoClient.setReadPreference(ReadPreference.secondaryPreferred());
+                mongoClient.setWriteConcern(WriteConcern.REPLICAS_SAFE);
+            }
             mongoClients.put(cacheKey, mongoClient);
             return mongoClient;
         }

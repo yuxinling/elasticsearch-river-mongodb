@@ -155,7 +155,7 @@ public class RiverMongoInitialImportTest extends RiverMongoDBTestAbstract {
             createRiver();
             Thread.sleep(wait);
 
-            Assert.assertEquals(MongoDBRiverHelper.getRiverStatus(getNode().client(), getRiver()), Status.INITIAL_IMPORT_FAILED);
+            Assert.assertEquals(MongoDBRiverHelper.getRiverStatus(getNode().client(), getRiver()), Status.START_FAILED);
         } catch (Throwable t) {
             logger.error("ImportFailWithExistingDataInSameIndexType failed.", t);
             t.printStackTrace();
