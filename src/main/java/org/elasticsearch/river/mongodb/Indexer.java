@@ -68,8 +68,18 @@ class Indexer implements Runnable {
                 // 1. Attempt to fill as much of the bulk request as possible
                 QueueEntry entry = context.getStream().take();
                 lastTimestamp = processBlockingQueue(entry);
+                int count = 0;
                 while ((entry = context.getStream().poll(definition.getBulk().getFlushInterval().millis(), MILLISECONDS)) != null) {
+
                     lastTimestamp = processBlockingQueue(entry);
+                    // if the count = 10000. Update the timestamp
+                    if (count != 0 && count % 10000 == 0) {
+                        if (lastTimestamp != null) {
+                            MongoDBRiver.setLastTimestamp(definition, lastTimestamp,
+                                    getBulkProcessor(definition.getIndexName(), definition.getTypeName()).getBulkProcessor());
+                        }
+                        count = 0;
+                    } else count++;
                 }
 
                 // 2. Update the timestamp
