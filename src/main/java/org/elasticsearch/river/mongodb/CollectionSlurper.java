@@ -59,11 +59,13 @@ class CollectionSlurper {
                 // MongoDB would delete the index and re-attempt the import
                 // We should probably do that too or at least have an option for it
                 // https://groups.google.com/d/msg/mongodb-user/hrOuS-lpMeI/opP6l0gndSEJ
-                logger.error("Cannot import collection {} into existing index", definition.getMongoCollection());
-                MongoDBRiverHelper.setRiverStatus(
-                        esClient, definition.getRiverName(), Status.INITIAL_IMPORT_FAILED);
-                return;
+                //logger.error("Cannot import collection {} into existing index", definition.getMongoCollection());
+                //MongoDBRiverHelper.setRiverStatus(esClient, definition.getRiverName(), Status.INITIAL_IMPORT_FAILED);
+                //return;
+
+                logger.info("The index[] is not empty...", definition.getIndexName());
             }
+
             if (definition.isImportAllCollections()) {
                 for (String name : slurpedDb.getCollectionNames()) {
                     if (name.length() < 7 || !name.substring(0, 7).equals("system.")) {
@@ -106,9 +108,8 @@ class CollectionSlurper {
      * Import a single collection into the index
      *
      * @param collection the collection to import
-     * @param timestamp the timestamp to use for the last imported document
-     * @throws InterruptedException
-     *             if the blocking queue stream is interrupted while waiting
+     * @param timestamp  the timestamp to use for the last imported document
+     * @throws InterruptedException if the blocking queue stream is interrupted while waiting
      */
     public void importCollection(DBCollection collection, Timestamp<?> timestamp) throws InterruptedException {
         // TODO: ensure the index type is empty
@@ -116,6 +117,8 @@ class CollectionSlurper {
         // slurpedDb.getCollection(definition.getMongoCollection());
 
         logger.info("MongoDBRiver is beginning initial import of " + collection.getFullName());
+        long start = System.currentTimeMillis();
+
         boolean inProgress = true;
         String lastId = null;
         while (inProgress) {
@@ -137,10 +140,10 @@ class CollectionSlurper {
                         DBObject object = cursor.next();
                         count++;
                         if (cursor.hasNext()) {
-                          lastId = addInsertToStream(null, applyFieldFilter(object), collection.getName());
+                            lastId = addInsertToStream(null, applyFieldFilter(object), collection.getName());
                         } else {
-                          logger.debug("Last entry for initial import of {} - add timestamp: {}", collection.getFullName(), timestamp);
-                          lastId = addInsertToStream(timestamp, applyFieldFilter(object), collection.getName());
+                            logger.debug("Last entry for initial import of {} - add timestamp: {}", collection.getFullName(), timestamp);
+                            lastId = addInsertToStream(timestamp, applyFieldFilter(object), collection.getName());
                         }
                     }
                     inProgress = false;
@@ -157,10 +160,10 @@ class CollectionSlurper {
                         if (object instanceof GridFSDBFile) {
                             GridFSDBFile file = grid.findOne(new ObjectId(object.get(MongoDBRiver.MONGODB_ID_FIELD).toString()));
                             if (cursor.hasNext()) {
-                              lastId = addInsertToStream(null, file);
+                                lastId = addInsertToStream(null, file);
                             } else {
-                              logger.debug("Last entry for initial import of {} - add timestamp: {}", collection.getFullName(), timestamp);
-                              lastId = addInsertToStream(timestamp, file);
+                                logger.debug("Last entry for initial import of {} - add timestamp: {}", collection.getFullName(), timestamp);
+                                lastId = addInsertToStream(timestamp, file);
                             }
                         }
                     }
@@ -178,6 +181,11 @@ class CollectionSlurper {
                 if (definition.isDisableIndexRefresh()) {
                     updateIndexRefresh(definition.getIndexName(), TimeValue.timeValueSeconds(1));
                 }
+
+                long end = System.currentTimeMillis();
+                logger.info("Initial import documents size {} use time {}/s", totalDocuments.get(), (end - start) / 1000);
+
+                //TODO: setting the index replicate.
             }
         }
     }

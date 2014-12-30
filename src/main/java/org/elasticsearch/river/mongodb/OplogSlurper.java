@@ -87,7 +87,7 @@ class OplogSlurper implements Runnable {
     @Override
     public void run() {
         while (context.getStatus() == Status.RUNNING) {
-            try {        
+            try {
                 // Slurp from oplog
                 DBCursor cursor = null;
                 try {
@@ -460,8 +460,8 @@ class OplogSlurper implements Runnable {
         }
 
         int options = Bytes.QUERYOPTION_TAILABLE | Bytes.QUERYOPTION_AWAITDATA | Bytes.QUERYOPTION_NOTIMEOUT
-        // Using OPLOGREPLAY to improve performance:
-        // https://jira.mongodb.org/browse/JAVA-771
+                // Using OPLOGREPLAY to improve performance:
+                // https://jira.mongodb.org/browse/JAVA-771
                 | Bytes.QUERYOPTION_OPLOGREPLAY;
 
         DBCursor cursor = oplogCollection.find(indexFilter).setOptions(options);
@@ -484,13 +484,15 @@ class OplogSlurper implements Runnable {
         DBObject entry = cursor.next();
         Timestamp<?> oplogTimestamp = Timestamp.on(entry);
         if (!time.equals(oplogTimestamp)) {
-            MongoDBRiverHelper.setRiverStatus(esClient, definition.getRiverName(), Status.RIVER_STALE);
-            throw new SlurperException("River out of sync with oplog.rs collection");
+            //MongoDBRiverHelper.setRiverStatus(esClient, definition.getRiverName(), Status.RIVER_STALE);
+            //throw new SlurperException("River out of sync with oplog.rs collection");
+            //TODO: the oplog timestamp is not equals the last timestamp.
+            logger.info("The oplog timestamp {} is not equals the last timestamp {}.", oplogTimestamp.getTime(), time.getTime());
         }
     }
 
     private void addQueryToStream(final Operation operation, final Timestamp<?> currentTimestamp, final DBObject update,
-            final String collection) throws InterruptedException {
+                                  final String collection) throws InterruptedException {
         if (logger.isTraceEnabled()) {
             logger.trace("addQueryToStream - operation [{}], currentTimestamp [{}], update [{}]", operation, currentTimestamp, update);
         }
@@ -507,7 +509,7 @@ class OplogSlurper implements Runnable {
     }
 
     private void addQueryToStream(final Operation operation, final Timestamp<?> currentTimestamp, final DBObject update,
-                final String collection, final DBCollection slurpedCollection) throws InterruptedException {
+                                  final String collection, final DBCollection slurpedCollection) throws InterruptedException {
         try (DBCursor cursor = slurpedCollection.find(update, findKeys)) {
             for (DBObject item : cursor) {
                 addToStream(operation, currentTimestamp, item, collection);

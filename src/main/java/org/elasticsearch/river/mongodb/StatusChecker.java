@@ -4,6 +4,8 @@ import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.ESLoggerFactory;
 import org.elasticsearch.river.mongodb.util.MongoDBRiverHelper;
 
+import java.util.Map;
+
 class StatusChecker implements Runnable {
     private static final ESLogger logger = ESLoggerFactory.getLogger(StatusChecker.class.getName());
 
@@ -23,15 +25,35 @@ class StatusChecker implements Runnable {
             try {
                 Status status = MongoDBRiverHelper.getRiverStatus(this.mongoDBRiver.esClient, this.definition.getRiverName());
                 if (status != this.context.getStatus()) {
+
                     if (status == Status.RUNNING && this.context.getStatus() != Status.STARTING) {
-                        logger.trace("About to start river: {}", this.definition.getRiverName());
-                        mongoDBRiver.internalStartRiver();
+                        logger.info("About to start river: {}", this.definition.getRiverName());
+                        this.mongoDBRiver.internalStartRiver();
                     } else if (status == Status.STOPPED) {
                         logger.info("About to stop river: {}", this.definition.getRiverName());
-                        mongoDBRiver.internalStopRiver();
-                     }
+                        this.mongoDBRiver.internalStopRiver();
+                    } else if (status == Status.IMPORT_FAILED || status == Status.COLLECTION_DROPED) {
+                        logger.info("The river {} status is {} ,River close and status thread interrupted.", this.definition.getRiverName(), status);
+                        this.mongoDBRiver.close();
+                    }
+
+                } else {
+                    if (status == Status.RUNNING && this.context.getStatus() != Status.STARTING) {
+                        Status mongoStatus = MongoDBRiverHelper.getMongoStatus(this.mongoDBRiver.esClient, this.definition.getRiverName());
+                        if (mongoStatus == Status.MONGO_UPDATE) {
+                            Map<String, Object> setting = MongoDBRiverHelper.getSetting(this.mongoDBRiver.esClient, this.definition.getRiverName());
+                            if (setting != null) {
+                                this.mongoDBRiver.internalRestarRiver(setting);
+                            } else {
+                                logger.error("The river[{}] setting is empty. closing...", this.definition.getRiverName());
+                                this.mongoDBRiver.close();
+                            }
+                        }
+                    }
+
                 }
-                Thread.sleep(1000L);
+
+                Thread.sleep(10_000L);
             } catch (InterruptedException e) {
                 logger.debug("Status thread interrupted", e, (Object) null);
                 Thread.currentThread().interrupt();
