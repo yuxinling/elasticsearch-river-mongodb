@@ -3,12 +3,7 @@ package org.elasticsearch.river.mongodb;
 import java.net.UnknownHostException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import javax.net.SocketFactory;
 import javax.net.ssl.SSLContext;
@@ -92,9 +87,14 @@ public class MongoDBRiverDefinition {
     public final static String SCRIPT_TYPE_FIELD = "script_type";
     public final static String COLLECTION_FIELD = "collection";
     public final static String GRIDFS_FIELD = "gridfs";
+
     public final static String INDEX_OBJECT = "index";
     public final static String NAME_FIELD = "name";
     public final static String TYPE_FIELD = "type";
+    public final static String MAPPING_FIELD = "mapping";
+    public final static String PARENT_FIELD = "_parent";
+    public final static String PARENT_ID_FIELD = "parent_id";
+
     public final static String LOCAL_DB_FIELD = "local";
     public final static String ADMIN_DB_FIELD = "admin";
     public final static String THROTTLE_SIZE_FIELD = "throttle_size";
@@ -154,6 +154,7 @@ public class MongoDBRiverDefinition {
     // index
     private final String indexName;
     private final String typeName;
+    private final IndexMapping indexMapping;
     private final int throttleSize;
 
     // bulk
@@ -206,6 +207,7 @@ public class MongoDBRiverDefinition {
         // index
         private String indexName;
         private String typeName;
+        private IndexMapping indexMapping;
         private int throttleSize;
 
         private Bulk bulk;
@@ -261,7 +263,7 @@ public class MongoDBRiverDefinition {
             this.mongoAdminPassword = mongoAdminPassword;
             return this;
         }
-        
+
         public Builder mongoAdminAuthDatabase(String mongoAdminAuthDatabase) {
             this.mongoAdminAuthDatabase = mongoAdminAuthDatabase;
             return this;
@@ -276,7 +278,7 @@ public class MongoDBRiverDefinition {
             this.mongoLocalPassword = mongoLocalPassword;
             return this;
         }
-        
+
         public Builder mongoLocalAuthDatabase(String mongoLocalAuthDatabase) {
             this.mongoLocalAuthDatabase = mongoLocalAuthDatabase;
             return this;
@@ -417,6 +419,11 @@ public class MongoDBRiverDefinition {
             return this;
         }
 
+        public Builder indexMapping(IndexMapping indexMapping) {
+            this.indexMapping = indexMapping;
+            return this;
+        }
+
         public Builder connectionsPerHost(int connectionsPerHost) {
             this.connectionsPerHost = connectionsPerHost;
             return this;
@@ -501,7 +508,7 @@ public class MongoDBRiverDefinition {
 
     @SuppressWarnings("unchecked")
     public synchronized static MongoDBRiverDefinition parseSettings(String riverName, String riverIndexName, RiverSettings settings,
-            ScriptService scriptService) {
+                                                                    ScriptService scriptService) {
 
         logger.trace("Parse river settings for {}", riverName);
         Preconditions.checkNotNull(riverName, "No riverName specified");
@@ -574,10 +581,10 @@ public class MongoDBRiverDefinition {
                         DEFAULT_THREADS_ALLOWED_TO_BLOCK_FOR_CONNECTION_MULTIPLIER));
 
                 mongoClientOptionsBuilder
-                    .connectTimeout(builder.connectTimeout)
-                    .socketTimeout(builder.socketTimeout)
-                    .connectionsPerHost(builder.connectionsPerHost)
-                    .threadsAllowedToBlockForConnectionMultiplier(builder.threadsAllowedToBlockForConnectionMultiplier);
+                        .connectTimeout(builder.connectTimeout)
+                        .socketTimeout(builder.socketTimeout)
+                        .connectionsPerHost(builder.connectionsPerHost)
+                        .threadsAllowedToBlockForConnectionMultiplier(builder.threadsAllowedToBlockForConnectionMultiplier);
 
                 if (builder.mongoSecondaryReadPreference) {
                     mongoClientOptionsBuilder.readPreference(ReadPreference.secondaryPreferred());
@@ -799,6 +806,29 @@ public class MongoDBRiverDefinition {
                         EsExecutors.boundedNumberOfProcessors(ImmutableSettings.EMPTY)));
                 builder.throttleSize(XContentMapValues.nodeIntegerValue(indexSettings.get(THROTTLE_SIZE_FIELD), bulkActions * 5));
             }
+            if (indexSettings.containsKey(MAPPING_FIELD)) {
+
+                Map<String, Object> mappingSetting = (Map<String, Object>) indexSettings.get(MAPPING_FIELD);
+                if (mappingSetting != null && mappingSetting.containsKey(PARENT_FIELD)) {
+                    Map<String, Object> parentSetting = (Map<String, Object>) mappingSetting.get(PARENT_FIELD);
+                    if (parentSetting != null && parentSetting.containsKey(TYPE_FIELD)
+                            && parentSetting.containsKey(PARENT_ID_FIELD)) {
+
+                        IndexMapping indexMapping = new IndexMapping();
+                        Map<String, Object> msetting = new HashMap<String, Object>();
+                        msetting.put(TYPE_FIELD, parentSetting.get(TYPE_FIELD));
+
+                        Map<String, Object> mapping = new HashMap<String, Object>();
+                        mapping.put(PARENT_FIELD, msetting);
+
+                        indexMapping.setMapping(mapping);
+                        indexMapping.setParentId((String) parentSetting.get(PARENT_ID_FIELD));
+
+                        builder.indexMapping(indexMapping);
+                    }
+                }
+            }
+
             builder.bulk(bulkBuilder.build());
         } else {
             builder.indexName(builder.mongoDb);
@@ -811,7 +841,7 @@ public class MongoDBRiverDefinition {
     private static SocketFactory getSSLSocketFactory() {
         SocketFactory sslSocketFactory;
         try {
-            final TrustManager[] trustAllCerts = new TrustManager[] { new X509TrustManager() {
+            final TrustManager[] trustAllCerts = new TrustManager[]{new X509TrustManager() {
 
                 @Override
                 public X509Certificate[] getAcceptedIssuers() {
@@ -825,7 +855,7 @@ public class MongoDBRiverDefinition {
                 @Override
                 public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
                 }
-            } };
+            }};
             final SSLContext sslContext = SSLContext.getInstance("SSL");
             sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
             // Create an ssl socket factory with our all-trusting manager
@@ -928,6 +958,7 @@ public class MongoDBRiverDefinition {
         // index
         this.indexName = builder.indexName;
         this.typeName = builder.typeName;
+        this.indexMapping = builder.indexMapping;
         this.throttleSize = builder.throttleSize;
 
         // bulk
@@ -973,7 +1004,7 @@ public class MongoDBRiverDefinition {
     public String getMongoAdminPassword() {
         return mongoAdminPassword;
     }
-    
+
     public String getMongoAdminAuthDatabase() {
         return mongoAdminAuthDatabase;
     }
@@ -985,7 +1016,7 @@ public class MongoDBRiverDefinition {
     public String getMongoLocalPassword() {
         return mongoLocalPassword;
     }
-    
+
     public String getMongoLocalAuthDatabase() {
         return mongoLocalAuthDatabase;
     }
@@ -1086,9 +1117,13 @@ public class MongoDBRiverDefinition {
         return typeName;
     }
 
+    public IndexMapping getIndexMapping() {
+        return indexMapping;
+    }
+
     /*
-     * Default throttle size is: 5 * bulk.bulkActions
-     */
+         * Default throttle size is: 5 * bulk.bulkActions
+         */
     public int getThrottleSize() {
         return throttleSize;
     }

@@ -68,8 +68,19 @@ class Indexer implements Runnable {
                 // 1. Attempt to fill as much of the bulk request as possible
                 QueueEntry entry = context.getStream().take();
                 lastTimestamp = processBlockingQueue(entry);
+
+                int count = 0;
                 while ((entry = context.getStream().poll(definition.getBulk().getFlushInterval().millis(), MILLISECONDS)) != null) {
                     lastTimestamp = processBlockingQueue(entry);
+
+                    // if the count = 10000. Update the timestamp
+                    if (count != 0 && count % 10000 == 0) {
+                        if (lastTimestamp != null) {
+                            MongoDBRiver.setLastTimestamp(definition, lastTimestamp,
+                                    getBulkProcessor(definition.getIndexName(), definition.getTypeName()).getBulkProcessor());
+                        }
+                        count = 0;
+                    } else count++;
                 }
 
                 // 2. Update the timestamp
@@ -211,7 +222,10 @@ class Indexer implements Runnable {
         try {
             String index = extractIndex(ctx);
             type = extractType(ctx, type);
-            String parent = extractParent(ctx);
+
+            //String parent = extractParent(ctx);
+            String parent = extractParentFromData(data);
+
             String routing = extractRouting(ctx);
             objectId = extractObjectId(ctx, objectId);
             updateBulkRequest(new BasicDBObject(data), objectId, operation, index, type, routing, parent);
@@ -459,6 +473,20 @@ class Indexer implements Runnable {
         } else {
             return parent.toString();
         }
+    }
+
+    private String extractParentFromData(Map<String, Object> data) {
+        if (definition.getIndexMapping() != null
+                && definition.getIndexMapping().getParentId() != null
+                && definition.getIndexMapping().getParentId().trim().length() > 0) {
+
+            Object parent = data.get(definition.getIndexMapping().getParentId());
+
+            if (parent != null) {
+                return parent.toString();
+            }
+        }
+        return null;
     }
 
     private String extractRouting(Map<String, Object> ctx) {

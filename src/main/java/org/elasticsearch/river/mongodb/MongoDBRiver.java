@@ -212,6 +212,12 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
                     try {
                         if (!esClient.admin().indices().prepareExists(definition.getIndexName()).get().isExists()) {
                             esClient.admin().indices().prepareCreate(definition.getIndexName()).get();
+                            if (definition.getIndexMapping() != null
+                                    && definition.getIndexMapping().getMapping() != null
+                                    && definition.getIndexMapping().getMapping().size() > 0) {
+                                esClient.admin().indices().preparePutMapping(definition.getIndexName())
+                                        .setType(definition.getTypeName()).setSource(definition.getIndexMapping().getMapping()).get();
+                            }
                         }
                     } catch (Exception e) {
                         if (ExceptionsHelper.unwrapCause(e) instanceof IndexAlreadyExistsException) {
@@ -230,17 +236,17 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
                     }
 
                     // GridFS
-                    if (definition.isMongoGridFS()) {
-                        try {
-                            if (logger.isDebugEnabled()) {
-                                logger.debug("Set explicit attachment mapping.");
-                            }
-                            esClient.admin().indices().preparePutMapping(definition.getIndexName()).setType(definition.getTypeName())
-                                    .setSource(getGridFSMapping()).get();
-                        } catch (Exception e) {
-                            logger.warn("Failed to set explicit mapping (attachment): {}", e);
-                        }
-                    }
+                    //if (definition.isMongoGridFS()) {
+                    //    try {
+                    //        if (logger.isDebugEnabled()) {
+                    //            logger.debug("Set explicit attachment mapping.");
+                    //        }
+                    //        esClient.admin().indices().preparePutMapping(definition.getIndexName()).setType(definition.getTypeName())
+                    //                .setSource(getGridFSMapping()).get();
+                    //    } catch (Exception e) {
+                    //        logger.warn("Failed to set explicit mapping (attachment): {}", e);
+                    //    }
+                    //}
 
                     // Replicate data roughly the same way MongoDB does
                     // https://groups.google.com/d/msg/mongodb-user/sOKlhD_E2ns/SvngoUHXtcAJ
@@ -262,6 +268,7 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
                             config = configProvider.call();
                             break;
                         } catch (MongoSocketException | MongoTimeoutException e) {
+                            logger.error("The get mongoConfig error.", e);
                             Thread.sleep(MONGODB_RETRY_ERROR_DELAY_MS);
                         }
                     }
@@ -332,6 +339,7 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
                 } finally {
                     // Startup is fully done
                     startupThread = null;
+                    MongoDBRiverHelper.setMongoStatus(esClient, definition.getRiverName(), Status.MONGO_NORMAL);
                 }
             }
         };
