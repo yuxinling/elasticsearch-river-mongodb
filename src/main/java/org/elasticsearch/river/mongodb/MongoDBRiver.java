@@ -212,9 +212,15 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
                     try {
                         if (!esClient.admin().indices().prepareExists(definition.getIndexName()).get().isExists()) {
                             esClient.admin().indices().prepareCreate(definition.getIndexName()).get();
-                            if (definition.getIndexMapping() != null
-                                    && definition.getIndexMapping().getMapping() != null
-                                    && definition.getIndexMapping().getMapping().size() > 0) {
+                        }
+
+                        if (definition.getIndexMapping() != null
+                                && definition.getIndexMapping().getMapping() != null
+                                && definition.getIndexMapping().getMapping().size() > 0) {
+
+                            if (!esClient.admin().indices().prepareTypesExists(definition.getIndexName())
+                                    .setTypes(definition.getTypeName()).get().isExists()) {
+
                                 esClient.admin().indices().preparePutMapping(definition.getIndexName())
                                         .setType(definition.getTypeName()).setSource(definition.getIndexMapping().getMapping()).get();
                             }
