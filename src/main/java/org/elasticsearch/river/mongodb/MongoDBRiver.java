@@ -211,7 +211,13 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
                     // Create the index if it does not exist
                     try {
                         if (!esClient.admin().indices().prepareExists(definition.getIndexName()).get().isExists()) {
-                            esClient.admin().indices().prepareCreate(definition.getIndexName()).get();
+                            if (definition.getIndexConfig() != null
+                                && definition.getIndexConfig().getIndexSetting() != null
+                                && definition.getIndexConfig().getIndexSetting().size() > 0) {
+
+                                esClient.admin().indices().prepareCreate(definition.getIndexName())
+                                    .setSettings(definition.getIndexConfig().getIndexSetting()).get();
+                            } else  esClient.admin().indices().prepareCreate(definition.getIndexName()).get();
                         }
 
                         if (definition.getIndexConfig() != null
