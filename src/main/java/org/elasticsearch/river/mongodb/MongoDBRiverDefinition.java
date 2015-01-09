@@ -91,8 +91,9 @@ public class MongoDBRiverDefinition {
     public final static String INDEX_OBJECT = "index";
     public final static String NAME_FIELD = "name";
     public final static String TYPE_FIELD = "type";
-    public final static String MAPPING_FIELD = "mapping";
-    public final static String PARENT_FIELD = "_parent";
+    public final static String SETTING_FIELD = "setting";
+    public final static String SETTING_INDEX_FIELD = "index";
+    public final static String SETTING_MAPPING_FIELD = "mapping";
     public final static String PARENT_ID_FIELD = "parent_id";
 
     public final static String LOCAL_DB_FIELD = "local";
@@ -154,7 +155,7 @@ public class MongoDBRiverDefinition {
     // index
     private final String indexName;
     private final String typeName;
-    private final IndexMapping indexMapping;
+    private final IndexConfig indexConfig;
     private final int throttleSize;
 
     // bulk
@@ -207,7 +208,7 @@ public class MongoDBRiverDefinition {
         // index
         private String indexName;
         private String typeName;
-        private IndexMapping indexMapping;
+        private IndexConfig indexConfig;
         private int throttleSize;
 
         private Bulk bulk;
@@ -419,8 +420,8 @@ public class MongoDBRiverDefinition {
             return this;
         }
 
-        public Builder indexMapping(IndexMapping indexMapping) {
-            this.indexMapping = indexMapping;
+        public Builder indexConfig(IndexConfig indexConfig) {
+            this.indexConfig = indexConfig;
             return this;
         }
 
@@ -806,35 +807,43 @@ public class MongoDBRiverDefinition {
                         EsExecutors.boundedNumberOfProcessors(ImmutableSettings.EMPTY)));
                 builder.throttleSize(XContentMapValues.nodeIntegerValue(indexSettings.get(THROTTLE_SIZE_FIELD), bulkActions * 5));
             }
-            if (indexSettings.containsKey(MAPPING_FIELD)) {
+            if (indexSettings.containsKey(SETTING_FIELD)) {
 
-                Map<String, Object> mappingSetting = (Map<String, Object>) indexSettings.get(MAPPING_FIELD);
-                if (mappingSetting != null && mappingSetting.containsKey(PARENT_FIELD)) {
-                    Map<String, Object> parentSetting = (Map<String, Object>) mappingSetting.get(PARENT_FIELD);
-                    if (parentSetting != null && parentSetting.containsKey(TYPE_FIELD)
-                            && parentSetting.containsKey(PARENT_ID_FIELD)) {
+                IndexConfig index = new IndexConfig();
+                Map<String, Object> indexConfig = (Map<String, Object>) indexSettings.get(SETTING_FIELD);
 
-                        IndexMapping indexMapping = new IndexMapping();
-                        Map<String, Object> msetting = new HashMap<String, Object>();
-                        msetting.put(TYPE_FIELD, parentSetting.get(TYPE_FIELD));
-
-                        Map<String, Object> mapping = new HashMap<String, Object>();
-                        mapping.put(PARENT_FIELD, msetting);
-
-                        indexMapping.setMapping(mapping);
-                        indexMapping.setParentId((String) parentSetting.get(PARENT_ID_FIELD));
-
-                        builder.indexMapping(indexMapping);
+                if (indexConfig != null && indexConfig.containsKey(SETTING_INDEX_FIELD)) {
+                    Map<String, Object> customIndex = (Map<String, Object>) indexConfig.get(SETTING_INDEX_FIELD);
+                    if (customIndex != null && customIndex.size() > 0) {
+                        index.setIndexSetting(customIndex);
                     }
                 }
+                if (indexConfig != null && indexConfig.containsKey(SETTING_MAPPING_FIELD)) {
+                    Map<String, Object> customMapping = (Map<String, Object>) indexConfig.get(SETTING_MAPPING_FIELD);
+                    if (customMapping != null && customMapping.size() > 0) {
+                        index.setMapping(customMapping);
+                    }
+                }
+
+                if (indexConfig != null && indexConfig.containsKey(PARENT_ID_FIELD)) {
+                    String parentId = (String) indexConfig.get(PARENT_ID_FIELD);
+                    if (parentId != null) {
+                        index.setParentId(parentId.trim());
+                    }
+                }
+
+                builder.indexConfig(index);
             }
 
             builder.bulk(bulkBuilder.build());
-        } else {
+        } else
+
+        {
             builder.indexName(builder.mongoDb);
             builder.typeName(builder.mongoDb);
             builder.bulk(new Bulk.Builder().build());
         }
+
         return builder.build();
     }
 
@@ -958,7 +967,7 @@ public class MongoDBRiverDefinition {
         // index
         this.indexName = builder.indexName;
         this.typeName = builder.typeName;
-        this.indexMapping = builder.indexMapping;
+        this.indexConfig = builder.indexConfig;
         this.throttleSize = builder.throttleSize;
 
         // bulk
@@ -1117,8 +1126,8 @@ public class MongoDBRiverDefinition {
         return typeName;
     }
 
-    public IndexMapping getIndexMapping() {
-        return indexMapping;
+    public IndexConfig getIndexConfig() {
+        return indexConfig;
     }
 
     /*

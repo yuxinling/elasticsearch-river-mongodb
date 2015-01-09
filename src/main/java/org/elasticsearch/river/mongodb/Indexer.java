@@ -237,6 +237,7 @@ class Indexer implements Runnable {
 
     private void updateBulkRequest(DBObject data, String objectId, Operation operation, String index, String type, String routing,
                                    String parent) throws IOException {
+
         if (logger.isTraceEnabled()) {
             logger.trace("Operation: {} - index: {} - type: {} - routing: {} - parent: {}", operation, index, type, routing, parent);
         }
@@ -246,6 +247,15 @@ class Indexer implements Runnable {
             logger.error("Unknown operation for id[{}] - entry [{}] - index[{}] - type[{}] and skip this item.", objectId, data, index, type);
             //context.setStatus(Status.IMPORT_FAILED);
             return;
+        }
+
+        if (operation == Operation.INSERT || operation == Operation.UPDATE) {
+            if (definition.getIndexConfig() != null && definition.getIndexConfig().getParentId() != null) {
+                if (parent == null && routing == null) {
+                    logger.error("Error Operation: {} - index: {} - type: {} - data: {} without parent or routing.", operation, index, type, data.toString());
+                    return;
+                }
+            }
         }
 
         if (operation == Operation.INSERT) {
@@ -476,11 +486,10 @@ class Indexer implements Runnable {
     }
 
     private String extractParentFromData(Map<String, Object> data) {
-        if (definition.getIndexMapping() != null
-                && definition.getIndexMapping().getParentId() != null
-                && definition.getIndexMapping().getParentId().trim().length() > 0) {
+        if (definition.getIndexConfig() != null
+                && definition.getIndexConfig().getParentId() != null) {
 
-            Object parent = data.get(definition.getIndexMapping().getParentId());
+            Object parent = data.get(definition.getIndexConfig().getParentId());
 
             if (parent != null) {
                 return parent.toString();
