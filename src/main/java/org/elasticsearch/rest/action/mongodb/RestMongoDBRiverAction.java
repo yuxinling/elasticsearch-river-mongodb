@@ -39,6 +39,7 @@ public class RestMongoDBRiverAction extends BaseRestHandler {
         logger.trace("RestMongoDBRiverAction - baseUrl: {}", baseUrl);
         controller.registerHandler(RestRequest.Method.GET, baseUrl + "/{river}/get", this);
         controller.registerHandler(RestRequest.Method.GET, baseUrl + "/{river}/start", this);
+        controller.registerHandler(RestRequest.Method.GET, baseUrl + "/{river}/restart", this);
         controller.registerHandler(RestRequest.Method.GET, baseUrl + "/{river}/stop", this);
         controller.registerHandler(RestRequest.Method.GET, baseUrl + "/{river}/list", this);
         controller.registerHandler(RestRequest.Method.GET, baseUrl + "/{river}/delete", this);
@@ -58,6 +59,9 @@ public class RestMongoDBRiverAction extends BaseRestHandler {
             return;
         } else if (request.path().endsWith("update")) {
             update(request, channel, esClient);
+            return;
+        } else if (request.path().endsWith("restart")) {
+            reStart(request, channel, esClient);
             return;
         } else if (request.path().endsWith("start")) {
             start(request, channel, esClient);
@@ -97,6 +101,20 @@ public class RestMongoDBRiverAction extends BaseRestHandler {
         }
         if (MongoDBRiverHelper.isRiverExist(esClient, river)) {
             MongoDBRiverHelper.setRiverStatus(esClient, river, Status.RUNNING);
+            respondSuccess(request, channel, RestStatus.OK);
+            return;
+        }
+        respondError(request, channel, "Does not exist river with '" + river + "'", RestStatus.BAD_REQUEST);
+    }
+
+    private void reStart(RestRequest request, RestChannel channel, Client esClient) {
+        String river = request.param("river");
+        if (river == null || river.isEmpty()) {
+            respondError(request, channel, "Parameter 'river' is required", RestStatus.BAD_REQUEST);
+            return;
+        }
+        if (MongoDBRiverHelper.isRiverExist(esClient, river)) {
+            MongoDBRiverHelper.setRiverStatus(esClient, river, Status.RESTART);
             respondSuccess(request, channel, RestStatus.OK);
             return;
         }

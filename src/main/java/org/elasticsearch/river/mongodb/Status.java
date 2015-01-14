@@ -13,6 +13,7 @@ public enum Status {
     STARTING,
     START_FAILED,
     RUNNING,
+    RESTART,
     STOPPED,
     IMPORT_FAILED,
 

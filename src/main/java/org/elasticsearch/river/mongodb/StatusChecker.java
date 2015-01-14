@@ -35,6 +35,8 @@ class StatusChecker implements Runnable {
                     } else if (status == Status.IMPORT_FAILED || status == Status.COLLECTION_DROPED) {
                         logger.info("The river {} status is {} ,River close and status thread interrupted.", this.definition.getRiverName(), status);
                         this.mongoDBRiver.close();
+                    } else if (status == Status.RESTART) {
+                        this.mongoDBRiver.internalRestarRiver();
                     }
 
                 } else {
@@ -49,8 +51,9 @@ class StatusChecker implements Runnable {
                                 this.mongoDBRiver.close();
                             }
                         }
+                    } else if (status == Status.RESTART) {
+                        this.mongoDBRiver.internalRestarRiver();
                     }
-
                 }
 
                 Thread.sleep(10_000L);

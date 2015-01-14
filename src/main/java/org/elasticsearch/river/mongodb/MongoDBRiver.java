@@ -395,14 +395,29 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
             logger.info("Restart the river {}.", riverName.getName());
 
             internalStopRiver();
-
-            Timestamp lastTime = getLastTimestamp(esClient, definition);
-            MongoDBRiverHelper.recordLastTime(esClient, definition.getRiverName(), lastTime);
+            //Timestamp lastTime = getLastTimestamp(esClient, definition);
+            //MongoDBRiverHelper.recordLastTime(esClient, definition.getRiverName(), lastTime);
             MongoDBRiverHelper.deleteLastTime(esClient, definition);
 
             RiverSettings riverSettings = new RiverSettings(this.settings.globalSettings(), settings);
             this.definition = MongoDBRiverDefinition.parseSettings(this.riverName.name(), riverIndexName, riverSettings, scriptService);
 
+            MongoDBRiverHelper.setRiverStatus(esClient, riverName.getName(), Status.RUNNING);
+            internalStartRiver();
+        } catch (Exception e) {
+            logger.error("Fail to restart river {}", e, riverName.getName());
+            this.context.setStatus(Status.STOPPED);
+        }
+
+    }
+
+    public void internalRestarRiver() {
+        try {
+            logger.info("Restart the river {}.", riverName.getName());
+
+            internalStopRiver();
+
+            MongoDBRiverHelper.setRiverStatus(esClient, riverName.getName(), Status.RUNNING);
             internalStartRiver();
         } catch (Exception e) {
             logger.error("Fail to restart river {}", e, riverName.getName());
