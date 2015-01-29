@@ -95,6 +95,7 @@ class OplogSlurper implements Runnable {
                     if (cursor == null) {
                         cursor = processFullOplog();
                     }
+                    logger.info("The river {} tailing the collection.", definition.getRiverName());
                     while (cursor.hasNext()) {
                         DBObject item = cursor.next();
                         // TokuMX secondaries can have ops in the oplog that
@@ -112,7 +113,7 @@ class OplogSlurper implements Runnable {
                     Thread.sleep(500);
                 } finally {
                     if (cursor != null) {
-                        logger.trace("Closing oplog cursor");
+                        logger.info("Closing oplog cursor with river {}", definition.getRiverName());
                         cursor.close();
                     }
                 }

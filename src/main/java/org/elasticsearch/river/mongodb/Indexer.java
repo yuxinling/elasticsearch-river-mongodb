@@ -269,7 +269,7 @@ class Indexer implements Runnable {
             if (logger.isTraceEnabled()) {
                 logger.trace("Update operation - id: {} - contains attachment: {}", objectId, (data instanceof GridFSDBFile));
             }
-            deleteBulkRequest(objectId, index, type, routing, parent);
+            //deleteBulkRequest(objectId, index, type, routing, parent);
             getBulkProcessor(index, type).addBulkRequest(objectId, build(data, objectId), routing, parent);
         }
         if (operation == Operation.DELETE) {

@@ -140,6 +140,7 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
         this.esClient = esClient;
         this.scriptService = scriptService;
         this.mongoClientService = mongoClientService;
+        this.riverIndexName = riverIndexName;
         this.definition = MongoDBRiverDefinition.parseSettings(riverName.name(), riverIndexName, settings, scriptService);
 
         BlockingQueue<QueueEntry> stream = definition.getThrottleSize() == -1 ? new LinkedTransferQueue<QueueEntry>()
@@ -210,14 +211,17 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
                 try {
                     // Create the index if it does not exist
                     try {
+
+                        esClient.admin().cluster().prepareHealth(riverIndexName).setWaitForGreenStatus().setTimeout("5m").execute().actionGet();
+
                         if (!esClient.admin().indices().prepareExists(definition.getIndexName()).get().isExists()) {
                             if (definition.getIndexConfig() != null
-                                && definition.getIndexConfig().getIndexSetting() != null
-                                && definition.getIndexConfig().getIndexSetting().size() > 0) {
+                                    && definition.getIndexConfig().getIndexSetting() != null
+                                    && definition.getIndexConfig().getIndexSetting().size() > 0) {
 
                                 esClient.admin().indices().prepareCreate(definition.getIndexName())
-                                    .setSettings(definition.getIndexConfig().getIndexSetting()).get();
-                            } else  esClient.admin().indices().prepareCreate(definition.getIndexName()).get();
+                                        .setSettings(definition.getIndexConfig().getIndexSetting()).get();
+                            } else esClient.admin().indices().prepareCreate(definition.getIndexName()).get();
                         }
 
                         if (definition.getIndexConfig() != null

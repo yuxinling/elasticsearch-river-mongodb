@@ -86,30 +86,6 @@ public abstract class MongoDBRiverHelper {
         }
     }
 
-    public static void recordLastTime(Client client, String riverName, Timestamp lastTime) {
-        logger.info("saveUpdateLastTime record {}  - {}", riverName, lastTime);
-        try {
-            SearchRequestBuilder builder = client.prepareSearch("_river");
-            builder.setTypes("river_update");
-            builder.setQuery(QueryBuilders.termQuery("riverName", riverName));
-            builder.addSort("timestamp", SortOrder.DESC);
-            builder.setSize(1);
-
-            SearchResponse response = builder.execute().get();
-            if (response.getHits().getTotalHits() > 0) {
-
-                String id = response.getHits().getAt(0).getId();
-                Map source = response.getHits().getAt(0).getSource();
-                source.put("lastTime", lastTime.getTime());
-
-                client.prepareUpdate("_river", "river_update", id).setDoc(source).execute().get();
-            }
-
-        } catch (Exception ioEx) {
-            logger.error("saveRiverUpdate failed for river {}", ioEx, riverName);
-        }
-    }
-
     public static void mongoUpdateRecord(Client client, String riverName, List<Map<String, Object>> from, List<Map<String, Object>> to) {
 
         logger.info("saveRiverUpdate record {} - {} - {}", riverName, Arrays.toString(from.toArray()), Arrays.toString(to.toArray()));
