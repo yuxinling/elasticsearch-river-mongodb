@@ -126,7 +126,7 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
     protected final List<Thread> tailerThreads = Lists.newArrayList();
     protected volatile Thread startupThread;
     protected volatile Thread indexerThread;
-    protected volatile Thread statusThread;
+
     private String riverIndexName;
 
     private final MongoClientService mongoClientService;
@@ -165,10 +165,6 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
         logger.info("{} - {}", DESCRIPTION, MongoDBHelper.getRiverVersion());
 
         Status status = MongoDBRiverHelper.getRiverStatus(esClient, riverName.getName());
-//        if (status == Status.IMPORT_FAILED || status == Status.START_FAILED) {
-//            logger.error("Cannot start river {}. Current status is {}", riverName.getName(), status);
-//            return;
-//        }
 
         if (status == Status.STOPPED) {
             // Leave the current status of the river alone, but set the context status to 'stopped'.
@@ -185,9 +181,7 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
             logger.info("River {} startup pending", riverName.getName());
         }
 
-        statusThread = EsExecutors.daemonThreadFactory(settings.globalSettings(), "mongodb_river_status:" + definition.getIndexName()).newThread(
-                new StatusChecker(this, definition, context));
-        statusThread.start();
+        StatusCheckerProxy.instance().addRiverCheck(this);
     }
 
     private void definition() {
@@ -416,7 +410,6 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
             definition();
 
             MongoDBRiverHelper.setRiverStatus(esClient, riverName.getName(), Status.RUNNING);
-            internalStartRiver();
         } catch (Exception e) {
             logger.error("Fail to restart river {}", e, riverName.getName());
             this.context.setStatus(Status.STOPPED);
@@ -427,14 +420,7 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
     @Override
     public void close() {
         logger.info("Closing river {}", riverName.getName());
-
-        // Stop the status thread completely, it will be re-started by #start()
-        if (statusThread != null) {
-            statusThread.interrupt();
-            statusThread = null;
-        }
-
-        // Cleanup the other parts (the status thread is gone, and can't do that for us anymore)
+        StatusCheckerProxy.instance().removeRiverCheck(this);
         internalStopRiver();
     }
 

@@ -5,8 +5,10 @@ import org.apache.commons.lang.StringUtils;
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest;
 import org.elasticsearch.action.admin.indices.exists.types.TypesExistsRequest;
 import org.elasticsearch.action.get.GetResponse;
+import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.action.update.UpdateResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
@@ -16,6 +18,7 @@ import org.elasticsearch.index.query.FilterBuilders;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.river.mongodb.MongoDBRiver;
 import org.elasticsearch.river.mongodb.Status;
+import org.elasticsearch.river.mongodb.StatusCache;
 import org.elasticsearch.search.SearchHit;
 
 import java.io.IOException;
@@ -26,15 +29,24 @@ import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 public abstract class MongoDBRiverHelper {
 
     private static final ESLogger logger = Loggers.getLogger(MongoDBRiverHelper.class);
+    private static StatusCache cache = StatusCache.instance();
 
     public static Status getRiverStatus(Client client, String riverName) {
+
+        Status status = cache.getStatus(riverName);
+        if (status != null) return status;
+
         GetResponse statusResponse = client.prepareGet("_river", riverName, MongoDBRiver.STATUS_ID).get();
         if (!statusResponse.isExists()) {
             return Status.UNKNOWN;
         } else {
             Object obj = XContentMapValues.extractValue(MongoDBRiver.TYPE + "." + MongoDBRiver.STATUS_FIELD,
                     statusResponse.getSourceAsMap());
-            return Status.valueOf(obj.toString());
+
+            status = Status.valueOf(obj.toString());
+            cache.setStatus(riverName, status);
+
+            return status;
         }
     }
 
@@ -45,6 +57,7 @@ public abstract class MongoDBRiverHelper {
             xb = jsonBuilder().startObject().startObject(MongoDBRiver.TYPE).field(MongoDBRiver.STATUS_FIELD, status).endObject()
                     .endObject();
             client.prepareIndex("_river", riverName, MongoDBRiver.STATUS_ID).setSource(xb).get();
+            cache.setStatus(riverName, status);
         } catch (IOException ioEx) {
             logger.error("setRiverStatus failed for river {}", ioEx, riverName);
         }
@@ -79,6 +92,18 @@ public abstract class MongoDBRiverHelper {
             return client.admin().indices().typesExists(new TypesExistsRequest(new String[]{"_river"}, riverName)).actionGet().isExists();
         }
         return false;
+    }
+
+    public static String getRiverNodeName(Client client, String riverName) {
+
+        GetResponse statusResponse = client.prepareGet("_river", riverName, "_status").get();
+        if (!statusResponse.isExists()) {
+            return null;
+        } else {
+            Object obj = XContentMapValues.extractValue("node.name",statusResponse.getSourceAsMap());
+            return obj.toString();
+        }
+
     }
 
 }

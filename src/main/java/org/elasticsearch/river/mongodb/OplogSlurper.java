@@ -86,65 +86,75 @@ class OplogSlurper implements Runnable {
 
     @Override
     public void run() {
-//        while (context.getStatus() == Status.RUNNING) {
-//            try {
-//                // Slurp from oplog
-//                DBCursor cursor = null;
-//                try {
-//                    cursor = oplogCursor(timestamp);
-//                    if (cursor == null) {
-//                        cursor = processFullOplog();
-//                    }
-//                    logger.info("The river {} tailing the collection.", definition.getRiverName());
-//                    while (cursor.hasNext()) {
-//                        DBObject item = cursor.next();
-//                        // TokuMX secondaries can have ops in the oplog that
-//                        // have not yet been applied
-//                        // We need to wait until they have been applied before
-//                        // processing them
-//                        Object applied = item.get("a");
-//                        if (applied != null && !applied.equals(Boolean.TRUE)) {
-//                            logger.debug("Encountered oplog entry with a:false, ts:" + item.get("ts"));
-//                            break;
-//                        }
-//                        timestamp = processOplogEntry(item, timestamp);
-//                    }
-//                    logger.debug("Before waiting for 500 ms");
-//                    Thread.sleep(500);
-//                } finally {
-//                    if (cursor != null) {
-//                        logger.info("Closing oplog cursor with river {}", definition.getRiverName());
-//                        cursor.close();
-//                    }
-//                }
-//            } catch (SlurperException e) {
-//                logger.error("Exception in slurper", e);
-//                Thread.currentThread().interrupt();
-//                break;
-//            } catch (MongoInterruptedException | InterruptedException e) {
-//                logger.info("river-mongodb slurper interrupted");
-//                Thread.currentThread().interrupt();
-//                break;
-//            } catch (MongoSocketException | MongoTimeoutException | MongoCursorNotFoundException e) {
-//                logger.info("Oplog tailing - {} - {}. Will retry.", e.getClass().getSimpleName(), e.getMessage());
-//                logger.debug("Total documents inserted so far by river {}: {}", definition.getRiverName(), totalDocuments.get());
-//                try {
-//                    Thread.sleep(MongoDBRiver.MONGODB_RETRY_ERROR_DELAY_MS);
-//                } catch (InterruptedException iEx) {
-//                    logger.info("river-mongodb slurper interrupted");
-//                    Thread.currentThread().interrupt();
-//                    break;
-//                }
-//            } catch (Exception e) {
-//                logger.error("Exception while looping in cursor", e);
-//                Thread.currentThread().interrupt();
-//                break;
-//            }
-//        }
-        logger.warn("The river[{}] status[{}] slurper is stopping.", definition.getRiverName(), context.getStatus());
-        if (context.getStatus() == Status.RUNNING) {
-            MongoDBRiverHelper.setRiverStatus(esClient, definition.getRiverName(), Status.INTERRUPTED);
+        while (context.getStatus() == Status.RUNNING) {
+            try {
+                // Slurp from oplog
+                DBCursor cursor = null;
+                try {
+                    cursor = oplogCursor(timestamp);
+                    if (cursor == null) {
+                        cursor = processFullOplog();
+                    }
+                    logger.info("The river {} tailing the collection.", definition.getRiverName());
+                    while (cursor.hasNext()) {
+                        DBObject item = cursor.next();
+                        // TokuMX secondaries can have ops in the oplog that
+                        // have not yet been applied
+                        // We need to wait until they have been applied before
+                        // processing them
+                        Object applied = item.get("a");
+                        if (applied != null && !applied.equals(Boolean.TRUE)) {
+                            logger.debug("Encountered oplog entry with a:false, ts:" + item.get("ts"));
+                            break;
+                        }
+                        timestamp = processOplogEntry(item, timestamp);
+                    }
+                    logger.debug("Before waiting for 500 ms");
+                    Thread.sleep(500);
+                } finally {
+                    if (cursor != null) {
+                        logger.info("Closing oplog cursor with river {}", definition.getRiverName());
+                        cursor.close();
+                    }
+                }
+            } catch (SlurperException e) {
+                logger.error("Exception in slurper", e);
+                if (context.getStatus() == Status.RUNNING) {
+                    MongoDBRiverHelper.setRiverStatus(esClient, definition.getRiverName(), Status.INTERRUPTED);
+                }
+                Thread.currentThread().interrupt();
+                break;
+            } catch (MongoInterruptedException | InterruptedException e) {
+                logger.info("river-mongodb slurper interrupted");
+                if (context.getStatus() == Status.RUNNING) {
+                    MongoDBRiverHelper.setRiverStatus(esClient, definition.getRiverName(), Status.INTERRUPTED);
+                }
+                Thread.currentThread().interrupt();
+                break;
+            } catch (MongoSocketException | MongoTimeoutException | MongoCursorNotFoundException e) {
+                logger.info("Oplog tailing - {} - {}. Will retry.", e.getClass().getSimpleName(), e.getMessage());
+                logger.debug("Total documents inserted so far by river {}: {}", definition.getRiverName(), totalDocuments.get());
+                try {
+                    Thread.sleep(MongoDBRiver.MONGODB_RETRY_ERROR_DELAY_MS);
+                } catch (InterruptedException iEx) {
+                    logger.info("river-mongodb slurper interrupted");
+                    if (context.getStatus() == Status.RUNNING) {
+                        MongoDBRiverHelper.setRiverStatus(esClient, definition.getRiverName(), Status.INTERRUPTED);
+                    }
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            } catch (Exception e) {
+                logger.error("Exception while looping in cursor", e);
+                if (context.getStatus() == Status.RUNNING) {
+                    MongoDBRiverHelper.setRiverStatus(esClient, definition.getRiverName(), Status.INTERRUPTED);
+                }
+                Thread.currentThread().interrupt();
+                break;
+            }
         }
+        logger.warn("The river[{}] status[{}] slurper is stopping.", definition.getRiverName(), context.getStatus());
+
     }
 
     protected boolean riverHasIndexedFromOplog() {

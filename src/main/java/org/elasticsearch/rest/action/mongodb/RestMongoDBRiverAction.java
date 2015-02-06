@@ -1,8 +1,14 @@
 package org.elasticsearch.rest.action.mongodb;
 
 import com.google.common.collect.Maps;
+import org.apache.commons.lang.StringUtils;
+import org.elasticsearch.action.admin.cluster.reroute.ClusterRerouteRequest;
+import org.elasticsearch.action.admin.cluster.reroute.ClusterRerouteRequestBuilder;
+import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.cluster.ClusterService;
+import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentBuilder;
@@ -31,10 +37,13 @@ public class RestMongoDBRiverAction extends BaseRestHandler {
     private final String riverIndexName;
 
     @Inject
-    public RestMongoDBRiverAction(Settings settings, Client esClient, RestController controller, @RiverIndexName String riverIndexName) {
+    public RestMongoDBRiverAction(Settings settings,
+                                  Client esClient,
+                                  RestController controller,
+                                  @RiverIndexName String riverIndexName) {
         super(settings, esClient);
         this.riverIndexName = riverIndexName;
-        //String baseUrl = "/" + riverIndexName + "/" + MongoDBRiver.TYPE;
+
         String baseUrl = "/" + riverIndexName;
         logger.trace("RestMongoDBRiverAction - baseUrl: {}", baseUrl);
         controller.registerHandler(RestRequest.Method.GET, baseUrl + "/{river}/get", this);
@@ -48,8 +57,7 @@ public class RestMongoDBRiverAction extends BaseRestHandler {
 
     @Override
     protected void handleRequest(RestRequest request, RestChannel channel, Client esClient) throws Exception {
-        logger.debug("uri: {}", request.uri());
-        logger.debug("action: {}", request.param("action"));
+        logger.debug("{} uri: {}", request.method(), request.uri());
 
         if (request.path().endsWith("list")) {
             list(request, channel, esClient);
