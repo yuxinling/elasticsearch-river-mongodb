@@ -43,7 +43,7 @@ public class RestMongoDBRiverAction extends BaseRestHandler {
         controller.registerHandler(RestRequest.Method.GET, baseUrl + "/{river}/stop", this);
         controller.registerHandler(RestRequest.Method.GET, baseUrl + "/{river}/list", this);
         controller.registerHandler(RestRequest.Method.GET, baseUrl + "/{river}/delete", this);
-        controller.registerHandler(RestRequest.Method.PUT, baseUrl + "/{river}/update", this);
+        controller.registerHandler(RestRequest.Method.GET, baseUrl + "/{river}/status", this);
     }
 
     @Override
@@ -57,8 +57,8 @@ public class RestMongoDBRiverAction extends BaseRestHandler {
         } else if (request.path().endsWith("get")) {
             get(request, channel, esClient);
             return;
-        } else if (request.path().endsWith("update")) {
-            update(request, channel, esClient);
+        } else if (request.path().endsWith("status")) {
+            status(request, channel, esClient);
             return;
         } else if (request.path().endsWith("restart")) {
             reStart(request, channel, esClient);
@@ -168,32 +168,32 @@ public class RestMongoDBRiverAction extends BaseRestHandler {
         }
     }
 
-    private void update(RestRequest request, RestChannel channel, Client esClient) {
-        try {
-            String river = request.param("river");
-            if (river == null || river.isEmpty()) {
-                respondError(request, channel, "Parameter 'river' is required", RestStatus.BAD_REQUEST);
-                return;
-            }
-
-            if (!MongoDBRiverHelper.isRiverExist(esClient, river)) {
-                respondError(request, channel, "Does not exist river with '" + river + "'", RestStatus.BAD_REQUEST);
-                return;
-            }
-
-            if (request.hasContent()) {
-                Map<String, Object> servers = SourceLookup.sourceAsMap(request.content());
-                if (servers == null || !servers.containsKey("servers")) {
-                    respondError(request, channel, "Parameter 'servers' is required", RestStatus.BAD_REQUEST);
-                }
-                List<Map<String, Object>> address = (List<Map<String, Object>>) servers.get("servers");
-                MongoDBRiverHelper.updateMongo(esClient, river, address);
-            }
-            respondSuccess(request, channel, RestStatus.OK);
-        } catch (Exception e) {
-            e.printStackTrace();
-            respondError(request, channel, "Update 'servers' error:" + e.getMessage(), RestStatus.BAD_REQUEST);
-        }
+    private void status(RestRequest request, RestChannel channel, Client esClient) {
+//        try {
+//            String river = request.param("river");
+//            if (river == null || river.isEmpty()) {
+//                respondError(request, channel, "Parameter 'river' is required", RestStatus.BAD_REQUEST);
+//                return;
+//            }
+//
+//            if (!MongoDBRiverHelper.isRiverExist(esClient, river)) {
+//                respondError(request, channel, "Does not exist river with '" + river + "'", RestStatus.BAD_REQUEST);
+//                return;
+//            }
+//
+//            if (request.hasContent()) {
+//                Map<String, Object> servers = SourceLookup.sourceAsMap(request.content());
+//                if (servers == null || !servers.containsKey("servers")) {
+//                    respondError(request, channel, "Parameter 'servers' is required", RestStatus.BAD_REQUEST);
+//                }
+//                List<Map<String, Object>> address = (List<Map<String, Object>>) servers.get("servers");
+//                MongoDBRiverHelper.updateMongo(esClient, river, address);
+//            }
+//            respondSuccess(request, channel, RestStatus.OK);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//            respondError(request, channel, "Update 'servers' error:" + e.getMessage(), RestStatus.BAD_REQUEST);
+//        }
 
     }
 

@@ -98,7 +98,8 @@ public class MongoDBRiverBulkProcessor {
                     flushBulkProcessor.set(false);
                 } catch (Throwable t) {
                     logger.error("Drop collection operation failed", t);
-                    MongoDBRiverHelper.setRiverStatus(client, definition.getRiverName(), Status.IMPORT_FAILED);
+                    //MongoDBRiverHelper.setRiverStatus(client, definition.getRiverName(), Status.IMPORT_FAILED);
+                    MongoDBRiverHelper.setRiverStatus(client, definition.getRiverName(), Status.INTERRUPTED);
                     request.requests().clear();
                     bulkProcessor.close();
                     river.close();
@@ -129,7 +130,8 @@ public class MongoDBRiverBulkProcessor {
                 }
             } else {
                 logger.error("afterBulk - Bulk request failed: {} - {} - {}", executionId, request, failure);
-                MongoDBRiverHelper.setRiverStatus(client, definition.getRiverName(), Status.IMPORT_FAILED);
+                //MongoDBRiverHelper.setRiverStatus(client, definition.getRiverName(), Status.IMPORT_FAILED);
+                MongoDBRiverHelper.setRiverStatus(client, definition.getRiverName(), Status.INTERRUPTED);
                 request.requests().clear();
                 bulkProcessor.close();
                 river.close();
@@ -140,7 +142,8 @@ public class MongoDBRiverBulkProcessor {
         public void afterBulk(long executionId, BulkRequest request, BulkResponse response) {
             if (response.hasFailures()) {
                 logger.error("Bulk processor failed. {}", response.buildFailureMessage());
-                MongoDBRiverHelper.setRiverStatus(client, definition.getRiverName(), Status.IMPORT_FAILED);
+                //MongoDBRiverHelper.setRiverStatus(client, definition.getRiverName(), Status.IMPORT_FAILED);
+                MongoDBRiverHelper.setRiverStatus(client, definition.getRiverName(), Status.INTERRUPTED);
                 request.requests().clear();
                 bulkProcessor.close();
                 river.close();

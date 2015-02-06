@@ -28,6 +28,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedTransferQueue;
 
+import org.apache.commons.lang.StringUtils;
 import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.action.bulk.BulkProcessor;
 import org.elasticsearch.action.get.GetResponse;
@@ -46,6 +47,8 @@ import org.elasticsearch.river.RiverIndexName;
 import org.elasticsearch.river.RiverName;
 import org.elasticsearch.river.RiverSettings;
 import org.elasticsearch.river.mongodb.MongoConfig.Shard;
+import org.elasticsearch.river.mongodb.ds.DataSource;
+import org.elasticsearch.river.mongodb.ds.Server;
 import org.elasticsearch.river.mongodb.util.MongoDBHelper;
 import org.elasticsearch.river.mongodb.util.MongoDBRiverHelper;
 import org.elasticsearch.script.ScriptService;
@@ -71,9 +74,7 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
     public static final String NAME = "mongodb-river";
     public final static String RIVER_META = "_meta";
     public static final String STATUS_ID = "_riverstatus";
-    public final static String MONGO_STATUS = "_rivermongo";
     public static final String STATUS_FIELD = "status";
-    public final static String STATUS_MONGO = "mongo";
     public static final String DESCRIPTION = "MongoDB River Plugin";
     public static final String LAST_TIMESTAMP_FIELD = "_last_ts";
     public static final String LAST_GTID_FIELD = "_last_gtid";
@@ -129,19 +130,28 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
     private String riverIndexName;
 
     private final MongoClientService mongoClientService;
+    private final DataSource dataSource;
 
     @Inject
-    public MongoDBRiver(RiverName riverName, RiverSettings settings, @RiverIndexName String riverIndexName,
-                        Client esClient, ScriptService scriptService, MongoClientService mongoClientService) {
+    public MongoDBRiver(RiverName riverName,
+                        RiverSettings settings,
+                        @RiverIndexName String riverIndexName,
+                        Client esClient,
+                        ScriptService scriptService,
+                        MongoClientService mongoClientService,
+                        DataSource dataSource) {
         super(riverName, settings);
         if (logger.isTraceEnabled()) {
             logger.trace("Initializing river : [{}]", riverName.getName());
         }
         this.esClient = esClient;
         this.scriptService = scriptService;
+        this.dataSource = dataSource;
         this.mongoClientService = mongoClientService;
         this.riverIndexName = riverIndexName;
-        this.definition = MongoDBRiverDefinition.parseSettings(riverName.name(), riverIndexName, settings, scriptService);
+
+        //this.definition = MongoDBRiverDefinition.parseSettings(riverName.name(), riverIndexName, settings, scriptService);
+        definition();
 
         BlockingQueue<QueueEntry> stream = definition.getThrottleSize() == -1 ? new LinkedTransferQueue<QueueEntry>()
                 : new ArrayBlockingQueue<QueueEntry>(definition.getThrottleSize());
@@ -155,10 +165,10 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
         logger.info("{} - {}", DESCRIPTION, MongoDBHelper.getRiverVersion());
 
         Status status = MongoDBRiverHelper.getRiverStatus(esClient, riverName.getName());
-        if (status == Status.IMPORT_FAILED || status == Status.START_FAILED) {
-            logger.error("Cannot start river {}. Current status is {}", riverName.getName(), status);
-            return;
-        }
+//        if (status == Status.IMPORT_FAILED || status == Status.START_FAILED) {
+//            logger.error("Cannot start river {}. Current status is {}", riverName.getName(), status);
+//            return;
+//        }
 
         if (status == Status.STOPPED) {
             // Leave the current status of the river alone, but set the context status to 'stopped'.
@@ -180,6 +190,30 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
         statusThread.start();
     }
 
+    private void definition() {
+
+        Map<String, Object> settings = this.settings.settings();
+
+        Map<String, Object> mongodb = (Map<String, Object>) settings.get("mongodb");
+        if (mongodb == null) {
+
+        }
+
+        String dbname = (String) settings.get("dbname");
+        if (StringUtils.isEmpty(dbname)) {
+
+        }
+        List<Map<String, Object>> hosts = dataSource.getDatabaseServers(dbname);
+        if (hosts == null || hosts.size() == 0) {
+
+        }
+
+        mongodb.put("servers", hosts);
+
+        RiverSettings riverSettings = new RiverSettings(this.settings.globalSettings(), settings);
+        this.definition = MongoDBRiverDefinition.parseSettings(this.riverName.name(), riverIndexName, riverSettings, scriptService);
+    }
+
     /**
      * Execute actions to (re-)start the river on this node.
      */
@@ -190,6 +224,7 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
         }
         // Update the status: we're busy starting now.
         context.setStatus(Status.STARTING);
+
 
         // ES only starts one River at a time, so we start the river using a new thread so that
         // we don't block the startup of other rivers
@@ -251,31 +286,6 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
                         }
                     }
 
-                    // GridFS
-                    //if (definition.isMongoGridFS()) {
-                    //    try {
-                    //        if (logger.isDebugEnabled()) {
-                    //            logger.debug("Set explicit attachment mapping.");
-                    //        }
-                    //        esClient.admin().indices().preparePutMapping(definition.getIndexName()).setType(definition.getTypeName())
-                    //                .setSource(getGridFSMapping()).get();
-                    //    } catch (Exception e) {
-                    //        logger.warn("Failed to set explicit mapping (attachment): {}", e);
-                    //    }
-                    //}
-
-                    // Replicate data roughly the same way MongoDB does
-                    // https://groups.google.com/d/msg/mongodb-user/sOKlhD_E2ns/SvngoUHXtcAJ
-                    //
-                    // Steps:
-                    // Get oplog timestamp
-                    // Do the initial import
-                    // Sync from the oplog of each shard starting at timestamp
-                    //
-                    // Notes
-                    // Primary difference between river sync and MongoDB replica sync is that we ignore chunk migrations
-                    // We only need to know about CRUD commands. If data moves from one MongoDB shard to another
-                    // then we do not need to let ElasticSearch know that.
                     MongoClient mongoClusterClient = mongoClientService.getMongoClusterClient(definition);
                     MongoConfigProvider configProvider = new MongoConfigProvider(mongoClientService, definition);
                     MongoConfig config;
@@ -350,12 +360,15 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
                     logger.info("Started river {}", riverName.getName());
                 } catch (Throwable t) {
                     logger.warn("Failed to start river {}", t, riverName.getName());
-                    MongoDBRiverHelper.setRiverStatus(esClient, definition.getRiverName(), Status.START_FAILED);
-                    context.setStatus(Status.START_FAILED);
+
+                    //MongoDBRiverHelper.setRiverStatus(esClient, definition.getRiverName(), Status.START_FAILED);
+                    //context.setStatus(Status.START_FAILED);
+
+                    MongoDBRiverHelper.setRiverStatus(esClient, definition.getRiverName(), Status.INTERRUPTED);
+                    context.setStatus(Status.INTERRUPTED);
                 } finally {
                     // Startup is fully done
                     startupThread = null;
-                    MongoDBRiverHelper.setMongoStatus(esClient, definition.getRiverName(), Status.MONGO_NORMAL);
                 }
             }
         };
@@ -394,32 +407,13 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
         }
     }
 
-    public void internalRestarRiver(Map<String, Object> settings) {
-        try {
-            logger.info("Restart the river {}.", riverName.getName());
-
-            internalStopRiver();
-            //Timestamp lastTime = getLastTimestamp(esClient, definition);
-            //MongoDBRiverHelper.recordLastTime(esClient, definition.getRiverName(), lastTime);
-            MongoDBRiverHelper.deleteLastTime(esClient, definition);
-
-            RiverSettings riverSettings = new RiverSettings(this.settings.globalSettings(), settings);
-            this.definition = MongoDBRiverDefinition.parseSettings(this.riverName.name(), riverIndexName, riverSettings, scriptService);
-
-            MongoDBRiverHelper.setRiverStatus(esClient, riverName.getName(), Status.RUNNING);
-            internalStartRiver();
-        } catch (Exception e) {
-            logger.error("Fail to restart river {}", e, riverName.getName());
-            this.context.setStatus(Status.STOPPED);
-        }
-
-    }
-
     public void internalRestarRiver() {
         try {
             logger.info("Restart the river {}.", riverName.getName());
 
             internalStopRiver();
+            //re define the setting for hosts address
+            definition();
 
             MongoDBRiverHelper.setRiverStatus(esClient, riverName.getName(), Status.RUNNING);
             internalStartRiver();
@@ -429,7 +423,6 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
         }
 
     }
-
 
     @Override
     public void close() {
@@ -447,24 +440,6 @@ public class MongoDBRiver extends AbstractRiverComponent implements River {
 
     protected Timestamp<?> getLastProcessedTimestamp() {
         return MongoDBRiver.getLastTimestamp(esClient, definition);
-    }
-
-    private XContentBuilder getGridFSMapping() throws IOException {
-        XContentBuilder mapping = jsonBuilder()
-                .startObject()
-                .startObject(definition.getTypeName())
-                .startObject("properties")
-                .startObject("content").field("type", "attachment").endObject()
-                .startObject("filename").field("type", "string").endObject()
-                .startObject("contentType").field("type", "string").endObject()
-                .startObject("md5").field("type", "string").endObject()
-                .startObject("length").field("type", "long").endObject()
-                .startObject("chunkSize").field("type", "long").endObject()
-                .endObject()
-                .endObject()
-                .endObject();
-        logger.info("GridFS Mapping: {}", mapping.string());
-        return mapping;
     }
 
     /**
