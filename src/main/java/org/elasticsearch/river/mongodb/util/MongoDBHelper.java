@@ -40,6 +40,7 @@ import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import com.mongodb.gridfs.GridFSDBFile;
 import com.mongodb.gridfs.GridFSFile;
+import org.elasticsearch.river.mongodb.CustomField;
 
 /*
  * MongoDB Helper class
@@ -162,6 +163,48 @@ public abstract class MongoDBHelper {
         }
         return filteredObject;
     }
+
+    public static DBObject applyCustomFields(DBObject bsonObject, final Set<CustomField> customFields) {
+        if (customFields == null || customFields.size() == 0) {
+            return bsonObject;
+        }
+
+        DBObject filteredObject = bsonObject;
+        for (CustomField field : customFields) {
+            if (field.getValue() != null) {
+                filteredObject.put(field.getName(), field.getValue());
+            }
+            if (field.getRef() != null) {
+                Object value = getFieldValue(field.getRef(), filteredObject);
+                if (field.isLowcase() && value != null) {
+                    filteredObject.put(field.getName(), value.toString().toLowerCase());
+                } else {
+                    filteredObject.put(field.getName(), value);
+                }
+            }
+        }
+        return filteredObject;
+    }
+
+    public static Object getFieldValue(String field, DBObject filteredObject) {
+        if (field.contains(".")) {
+            String rootObject = field.substring(0, field.indexOf("."));
+            String childObject = field.substring(field.indexOf(".") + 1);
+            if (filteredObject.containsField(rootObject)) {
+                Object object = filteredObject.get(rootObject);
+                if (object instanceof DBObject) {
+                    DBObject object2 = (DBObject) object;
+                    return getFieldValue(childObject, object2);
+                }
+            }
+        } else {
+            if (filteredObject.containsField(field)) {
+                return filteredObject.get(field);
+            }
+        }
+        return null;
+    }
+
 
     public static String getRiverVersion() {
         String version = "Undefined";

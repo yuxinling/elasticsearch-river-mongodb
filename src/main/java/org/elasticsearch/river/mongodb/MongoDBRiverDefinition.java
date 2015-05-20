@@ -11,6 +11,7 @@ import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
+import com.google.common.collect.Sets;
 import org.bson.BasicBSONObject;
 import org.bson.types.BSONTimestamp;
 import org.bson.types.Binary;
@@ -66,6 +67,11 @@ public class MongoDBRiverDefinition {
     public final static String DROP_COLLECTION_FIELD = "drop_collection";
     public final static String EXCLUDE_FIELDS_FIELD = "exclude_fields";
     public final static String INCLUDE_FIELDS_FIELD = "include_fields";
+    public final static String CUSTOM_FIELDS = "custom_fields";
+    public final static String CUSTOM_FIELDS_NAME = "name";
+    public final static String CUSTOM_FIELDS_VALUE = "value";
+    public final static String CUSTOM_FIELDS_REF = "$ref";
+    public final static String CUSTOM_FIELDS_LOWCASE = "lowcase";
     public final static String INCLUDE_COLLECTION_FIELD = "include_collection";
     public final static String INITIAL_TIMESTAMP_FIELD = "initial_timestamp";
     public final static String INITIAL_TIMESTAMP_SCRIPT_TYPE_FIELD = "script_type";
@@ -140,6 +146,7 @@ public class MongoDBRiverDefinition {
     private final Boolean isMongos;
     private final Set<String> excludeFields;
     private final Set<String> includeFields;
+    private final Set<CustomField> customFields;
     private final String includeCollection;
     private final Timestamp<?> initialTimestamp;
     private final String script;
@@ -192,6 +199,7 @@ public class MongoDBRiverDefinition {
         private Boolean isMongos = null;
         private Set<String> excludeFields = null;
         private Set<String> includeFields = null;
+        private Set<CustomField> customFields = null;
         private String includeCollection = "";
         private Timestamp<?> initialTimestamp = null;
         private String script = null;
@@ -332,6 +340,11 @@ public class MongoDBRiverDefinition {
 
         public Builder includeFields(Set<String> includeFields) {
             this.includeFields = includeFields;
+            return this;
+        }
+
+        public Builder customFields(Set<CustomField> customFields) {
+            this.customFields = customFields;
             return this;
         }
 
@@ -671,6 +684,38 @@ public class MongoDBRiverDefinition {
                     builder.excludeFields(excludeFields);
                 }
 
+                if (mongoOptionsSettings.containsKey(CUSTOM_FIELDS)) {
+                    Set<CustomField> cfields = Sets.newHashSet();
+                    Object customFields = mongoOptionsSettings.get(CUSTOM_FIELDS);
+
+                    boolean isArray = XContentMapValues.isArray(customFields);
+                    if (isArray) {
+
+                        ArrayList<Map<String, Object>> fields = (ArrayList<Map<String, Object>>) customFields;
+                        for (Map<String, Object> field : fields) {
+
+                            String name = XContentMapValues.nodeStringValue(field.get(CUSTOM_FIELDS_NAME), null);
+                            if (name != null) {
+                                CustomField cfield = new CustomField();
+                                cfield.setName(name);
+
+                                String ref = XContentMapValues.nodeStringValue(field.get(CUSTOM_FIELDS_REF), null);
+                                Object value = field.get(CUSTOM_FIELDS_VALUE);
+                                boolean lowcase = XContentMapValues.nodeBooleanValue(field.get(CUSTOM_FIELDS_LOWCASE), false);
+                                cfield.setLowcase(lowcase);
+                                if (ref != null) cfield.setRef(ref);
+                                if (value != null) cfield.setValue(value);
+                                if (cfield.getRef() != null || cfield.getValue() != null) {
+                                    cfields.add(cfield);
+                                }
+
+                            }
+
+                        }
+                    }
+                    builder.customFields(cfields);
+                }
+
                 if (mongoOptionsSettings.containsKey(INITIAL_TIMESTAMP_FIELD)) {
                     BSONTimestamp timeStamp = null;
                     try {
@@ -951,6 +996,7 @@ public class MongoDBRiverDefinition {
         this.isMongos = builder.isMongos;
         this.excludeFields = builder.excludeFields;
         this.includeFields = builder.includeFields;
+        this.customFields = builder.customFields;
         this.includeCollection = builder.includeCollection;
         this.initialTimestamp = builder.initialTimestamp;
         this.script = builder.script;
@@ -1070,6 +1116,10 @@ public class MongoDBRiverDefinition {
         return includeFields;
     }
 
+    public Set<CustomField> getCustomFields() {
+        return customFields;
+    }
+
     public String getIncludeCollection() {
         return includeCollection;
     }
@@ -1130,9 +1180,11 @@ public class MongoDBRiverDefinition {
         return indexConfig;
     }
 
-    /*
-         * Default throttle size is: 5 * bulk.bulkActions
-         */
+    /**
+     * Default throttle size is: 5 * bulk.bulkActions
+     *
+     * @return
+     */
     public int getThrottleSize() {
         return throttleSize;
     }

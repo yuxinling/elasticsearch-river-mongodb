@@ -214,6 +214,7 @@ class CollectionSlurper {
                 file.setMetaData(applyFieldFilter(metadata));
             }
         } else {
+            object = MongoDBHelper.applyCustomFields(object, definition.getCustomFields());
             object = MongoDBHelper.applyExcludeFields(object, definition.getExcludeFields());
             object = MongoDBHelper.applyIncludeFields(object, definition.getIncludeFields());
         }
