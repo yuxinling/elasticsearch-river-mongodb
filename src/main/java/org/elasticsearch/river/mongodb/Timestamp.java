@@ -1,20 +1,19 @@
 package org.elasticsearch.river.mongodb;
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.Map;
-
-import org.bson.types.BSONTimestamp;
-import org.bson.types.Binary;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-
 import com.google.common.primitives.UnsignedBytes;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import com.mongodb.QueryOperators;
 import com.mongodb.util.JSON;
 import com.mongodb.util.JSONSerializers;
+import org.bson.types.BSONTimestamp;
+import org.bson.types.Binary;
+import org.elasticsearch.common.xcontent.XContentBuilder;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.Map;
 
 /**
  * Wrapper for BSON datatypes used in different MongoDB distros to specify the order of ops in the oplog.
@@ -66,6 +65,13 @@ public abstract class Timestamp<T extends Timestamp<T>> implements Comparable<Ti
         }
 
         @Override
+        public DBObject getOpNslogFilter() {
+            DBObject filter = new BasicDBObject(MongoDBRiver.OPLOG_TIMESTAMP, new BasicDBObject(QueryOperators.GTE, ts));
+            filter.put(MongoDBRiver.OPLOG_NAMESPACE, new BasicDBObject(QueryOperators.NE, "/.{24}\\.sys_.*$/"));
+            return filter;
+        }
+
+        @Override
         public void saveFields(XContentBuilder builder) throws IOException {
             builder.field(MongoDBRiver.LAST_TIMESTAMP_FIELD, JSON.serialize(ts));
         }
@@ -111,8 +117,12 @@ public abstract class Timestamp<T extends Timestamp<T>> implements Comparable<Ti
             return ts.getTime();
         }
 
-        @Override
         public DBObject getOplogFilter() {
+            return new BasicDBObject(MongoDBRiver.MONGODB_ID_FIELD, new BasicDBObject(QueryOperators.GTE, gtid));
+        }
+
+        @Override
+        public DBObject getOpNslogFilter() {
             return new BasicDBObject(MongoDBRiver.MONGODB_ID_FIELD, new BasicDBObject(QueryOperators.GTE, gtid));
         }
 
@@ -123,17 +133,21 @@ public abstract class Timestamp<T extends Timestamp<T>> implements Comparable<Ti
         }
     }
 
-    @SuppressWarnings({ "unchecked", "rawtypes" })
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public static int compare(Timestamp oplogTimestamp, Timestamp startTimestamp) {
         return oplogTimestamp.compareTo(startTimestamp);
     }
 
-    /** Parse timestamp field(s) on an oplog entry. */
+    /**
+     * Parse timestamp field(s) on an oplog entry.
+     */
     public static Timestamp<?> on(DBObject entry) {
         return on(entry.toMap(), false);
     }
 
-    /** Parse last timestamp field(s) from river source metadata. */
+    /**
+     * Parse last timestamp field(s) from river source metadata.
+     */
     public static Timestamp<?> on(Map<String, Object> map) {
         return on(map, true);
     }
@@ -178,5 +192,15 @@ public abstract class Timestamp<T extends Timestamp<T>> implements Comparable<Ti
 
     public abstract DBObject getOplogFilter();
 
+    public abstract DBObject getOpNslogFilter();
+
     public abstract void saveFields(XContentBuilder builder) throws IOException;
+
+//    public static void main(String[] args) {
+//        ///54dad8e760b2c93a0b7d44cf.sys_/
+//        Pattern p = Pattern.compile("/^.{24}\\.sys_.*$/");
+//        String s = "54dad8e760b2c93a0b7d44cf.sys_";
+//        Matcher m = p.matcher(s);
+//        System.out.println(m.find());
+//    }
 }

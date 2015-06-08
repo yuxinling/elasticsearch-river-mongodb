@@ -469,7 +469,7 @@ class OplogSlurper implements Runnable {
     }
 
     private DBCursor oplogCursor(final Timestamp<?> time) throws SlurperException {
-        DBObject indexFilter = time.getOplogFilter();
+        DBObject indexFilter = time.getOpNslogFilter();
         if (indexFilter == null) {
             return null;
         }
