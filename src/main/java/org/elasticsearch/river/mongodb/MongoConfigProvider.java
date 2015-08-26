@@ -151,7 +151,7 @@ public class MongoConfigProvider implements Callable<MongoConfig> {
         for (String server : definition.split(",")) {
             try {
                 servers.add(new ServerAddress(server));
-            } catch (UnknownHostException uhEx) {
+            } catch (Exception uhEx) {
                 logger.warn("failed to execute bulk", uhEx);
             }
         }

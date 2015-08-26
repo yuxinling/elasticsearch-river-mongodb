@@ -228,24 +228,34 @@ public abstract class RiverMongoDBTestAbstract {
 
     private static Iterable<ExecutableType> supportedExecutableTypes() {
         return Iterables.filter(Arrays.asList(ExecutableType.values()), new Predicate<ExecutableType>() {
-            @Override public boolean apply(ExecutableType _) { return _.isSupported; }});
+            @Override
+            public boolean apply(ExecutableType _) {
+                return _.isSupported;
+            }
+        });
     }
 
     protected static boolean tokuIsSupported() {
         return Platform.detect() == Platform.Linux && BitSize.detect() == BitSize.B64;
     }
 
-    /** Only include TOKUMX if on a supported platform */
+    /**
+     * Only include TOKUMX if on a supported platform
+     */
     @DataProvider(name = "allMongoExecutableTypes")
     public static Object[][] allMongoExecutableTypes() {
         return Iterables.toArray(Iterables.transform(supportedExecutableTypes(), new Function<ExecutableType, Object[]>() {
-            @Override public Object[] apply(ExecutableType _) { return new Object[] { _ }; }}),
-            Object[].class);
+                    @Override
+                    public Object[] apply(ExecutableType _) {
+                        return new Object[]{_};
+                    }
+                }),
+                Object[].class);
     }
 
     @DataProvider(name = "onlyVanillaMongo")
     public static Object[][] onlyVanillaMongo() {
-        return new Object[][] {{ ExecutableType.VANILLA }};
+        return new Object[][]{{ExecutableType.VANILLA}};
     }
 
     @BeforeSuite
@@ -271,10 +281,10 @@ public abstract class RiverMongoDBTestAbstract {
         Settings rsSettings = settings.getByPrefix(type.configKey + '.');
         int[] ports;
         if (rsSettings.getAsBoolean("useDynamicPorts", false)) {
-            ports = new int[] { Network.getFreeServerPort(), Network.getFreeServerPort(), Network.getFreeServerPort() };
+            ports = new int[]{Network.getFreeServerPort(), Network.getFreeServerPort(), Network.getFreeServerPort()};
         } else {
             int start = 37017 + 10 * type.ordinal();
-            ports = new int[] { start, start + 1, start + 2 };
+            ports = new int[]{start, start + 1, start + 2};
         }
         String replicaSetName = "es-test-" + type.configKey;
         // Create 3 mongod processes
@@ -284,7 +294,7 @@ public abstract class RiverMongoDBTestAbstract {
             Storage storage = new Storage("target/" + replicaSetName + '/' + i, replicaSetName, 20);
             MongoReplicaSet.Member member = new MongoReplicaSet.Member();
             member.config = new MongodConfigBuilder().version(Versions.withFeatures(new GenericVersion(rsSettings.get("version"))))
-                .net(new de.flapdoodle.embed.mongo.config.Net(ports[i - 1], Network.localhostIsIPv6())).replication(storage).build();
+                    .net(new de.flapdoodle.embed.mongo.config.Net(ports[i - 1], Network.localhostIsIPv6())).replication(storage).build();
             logger.trace("replSetName in config: {}", member.config.replication().getReplSetName());
             member.executable = starter.prepare(member.config);
             member.process = member.executable.start();
@@ -294,7 +304,7 @@ public abstract class RiverMongoDBTestAbstract {
         }
         ImmutableList<MongoReplicaSet.Member> members = builder.build();
         Thread.sleep(2000);
-        MongoClientOptions mco = MongoClientOptions.builder().autoConnectRetry(true).connectTimeout(15000).socketTimeout(60000).build();
+        MongoClientOptions mco = MongoClientOptions.builder().connectTimeout(15000).socketTimeout(60000).build();
         Mongo mongo = new MongoClient(new ServerAddress(Network.getLocalHost().getHostName(), ports[0]), mco);
         DB mongoAdminDB = mongo.getDB(ADMIN_DATABASE_NAME);
 
@@ -304,9 +314,9 @@ public abstract class RiverMongoDBTestAbstract {
         // Initialize replica set
         cr = mongoAdminDB.command(new BasicDBObject("replSetInitiate",
                 (DBObject) JSON.parse("{'_id': '" + replicaSetName + "', 'members': ["
-                + "{'_id': 0, 'host': '" + members.get(0).address.getHost() + ':' + members.get(0).address.getPort() + "'}, "
-                + "{'_id': 1, 'host': '" + members.get(1).address.getHost() + ':' + members.get(1).address.getPort() + "'}, "
-                + "{'_id': 2, 'host': '" + members.get(2).address.getHost() + ':' + members.get(2).address.getPort() + "', 'arbiterOnly' : true}]} }")));
+                        + "{'_id': 0, 'host': '" + members.get(0).address.getHost() + ':' + members.get(0).address.getPort() + "'}, "
+                        + "{'_id': 1, 'host': '" + members.get(1).address.getHost() + ':' + members.get(1).address.getPort() + "'}, "
+                        + "{'_id': 2, 'host': '" + members.get(2).address.getHost() + ':' + members.get(2).address.getPort() + "', 'arbiterOnly' : true}]} }")));
         logger.debug("replSetInitiate result: " + cr);
 
         Thread.sleep(5000);
@@ -400,17 +410,17 @@ public abstract class RiverMongoDBTestAbstract {
     protected String getJsonSettings(String jsonDefinition, int numPortArgs, Object... additionalArgs) throws Exception {
         logger.debug("Get river setting");
         String setting = copyToStringFromClasspath(jsonDefinition);
-        switch(numPortArgs) {
-        case 0:
-            return additionalArgs == null ? setting : String.format(setting, additionalArgs);
-        case 1:
-            return String.format(setting, concat(String.valueOf(getMongoPort(1)), additionalArgs));
-        case 3:
-            List<String> ports = Arrays.asList(
-                    String.valueOf(getMongoPort(1)), String.valueOf(getMongoPort(2)), String.valueOf(getMongoPort(3)));
-            return String.format(setting, concat(ports.toArray(), additionalArgs, Object.class));
-        default:
-            throw new IllegalArgumentException("numPortArgs must be one of { 0, 1, 3 }");
+        switch (numPortArgs) {
+            case 0:
+                return additionalArgs == null ? setting : String.format(setting, additionalArgs);
+            case 1:
+                return String.format(setting, concat(String.valueOf(getMongoPort(1)), additionalArgs));
+            case 3:
+                List<String> ports = Arrays.asList(
+                        String.valueOf(getMongoPort(1)), String.valueOf(getMongoPort(2)), String.valueOf(getMongoPort(3)));
+                return String.format(setting, concat(ports.toArray(), additionalArgs, Object.class));
+            default:
+                throw new IllegalArgumentException("numPortArgs must be one of { 0, 1, 3 }");
         }
     }
 
@@ -433,7 +443,9 @@ public abstract class RiverMongoDBTestAbstract {
 
     }
 
-    /** Prepend MongoDB ports as first numPortArgs to format jsonDefinition with. */
+    /**
+     * Prepend MongoDB ports as first numPortArgs to format jsonDefinition with.
+     */
     protected void createRiver(String jsonDefinition, String river, int numPortArgs, Object... args) throws Exception {
         logger.info("Create river [{}]", river);
         String settings = getJsonSettings(jsonDefinition, numPortArgs, args);
@@ -619,7 +631,9 @@ public abstract class RiverMongoDBTestAbstract {
         return index;
     }
 
-    /** Print a more useful string for each instance, in TestNG reports. */
+    /**
+     * Print a more useful string for each instance, in TestNG reports.
+     */
     @Override
     public String toString() {
         return executableType.name();

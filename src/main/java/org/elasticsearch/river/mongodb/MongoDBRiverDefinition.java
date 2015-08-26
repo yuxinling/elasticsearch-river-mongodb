@@ -552,7 +552,7 @@ public class MongoDBRiverDefinition {
                         logger.trace("Server: " + mongoHost + " - " + mongoPort);
                         try {
                             mongoServers.add(new ServerAddress(mongoHost, mongoPort));
-                        } catch (UnknownHostException uhEx) {
+                        } catch (Exception uhEx) {
                             logger.warn("Cannot add mongo server {}:{}", uhEx, mongoHost, mongoPort);
                         }
                     }
@@ -562,7 +562,7 @@ public class MongoDBRiverDefinition {
                 mongoPort = XContentMapValues.nodeIntegerValue(mongoSettings.get(PORT_FIELD), DEFAULT_DB_PORT);
                 try {
                     mongoServers.add(new ServerAddress(mongoHost, mongoPort));
-                } catch (UnknownHostException uhEx) {
+                } catch (Exception uhEx) {
                     logger.warn("Cannot add mongo server {}:{}", uhEx, mongoHost, mongoPort);
                 }
             }
@@ -820,7 +820,7 @@ public class MongoDBRiverDefinition {
             try {
                 mongoServers.add(new ServerAddress(mongoHost, mongoPort));
                 builder.mongoServers(mongoServers);
-            } catch (UnknownHostException e) {
+            } catch (Exception e) {
                 e.printStackTrace();
             }
             builder.mongoDb(riverName);
